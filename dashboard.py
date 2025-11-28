@@ -288,7 +288,7 @@ def get_top_players(league="EPL", limit=10):
         return pd.DataFrame()
 
 # --- MAIN UI ---
-st.title("🏟️ The Culture AI (V4)")
+st.title("🏟️ The Culture AI (V5)")
 
 # Sidebar for API Key
 with st.sidebar:
@@ -601,14 +601,14 @@ elif model is not None:
     
     fig.update_layout(
         polar=dict(
-            radialaxis=dict(visible=True, range=[0, 100], showticklabels=False),
+            radialaxis=dict(visible=True, range=[0, 100], showticklabels=True),
             bgcolor='rgba(255, 255, 255, 0.05)'
         ),
-        height=500, # Increased size
+        height=450,
         paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='white', size=14),
+        font=dict(color='white', size=12),
         showlegend=True,
-        margin=dict(l=80, r=80, t=20, b=20)
+        margin=dict(l=120, r=60, t=20, b=20)
     )
     st.plotly_chart(fig, use_container_width=True)
     
@@ -646,4 +646,4 @@ elif model is not None:
 
 
     # --- FOOTER ---
-    st.markdown('<div class="footer">(c) 2025 DON_GENIUS | V4 Model</div>', unsafe_allow_html=True)
+    st.markdown('<div class="footer">(c) 2025 DON_GENIUS | V5 Model</div>', unsafe_allow_html=True)
