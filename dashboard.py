@@ -308,6 +308,40 @@ if df.empty:
     st.warning(f"⚠️ No match data found for **{selected_league}**. Please run `python3 scripts/etl_pipeline.py` to fetch data.")
     st.stop()
 
+@st.cache_resource
+def load_model():
+    model = xgb.XGBClassifier()
+    # Try loading V5, fallback to V4
+    try:
+        model.load_model("football_v5.json")
+        st.toast("✅ Loaded Model V5 (Advanced Squad Metrics)")
+    except:
+        model.load_model("football_v4.json")
+        st.toast("⚠️ Loaded Model V4 (Fallback)")
+    return model
+
+def get_squad_stats(team_name):
+    engine = get_db_engine()
+    # Need to map name to ID first
+    # Or just join on name if unique enough, but ID is safer.
+    # Let's assume teams table has the name.
+    query = """
+    SELECT AVG(s.xg_chain) as avg_xg_chain, 
+           AVG(s.xg_buildup) as avg_xg_buildup
+    FROM player_season_stats s
+    JOIN players p ON s.player_id = p.player_id
+    JOIN teams t ON p.team_id = t.team_id
+    WHERE s.season = '2025' AND t.name = :name
+    """
+    try:
+        df = pd.read_sql(text(query), engine, params={"name": team_name})
+        if not df.empty and df.iloc[0]['avg_xg_chain'] is not None:
+            return df.iloc[0]['avg_xg_chain'], df.iloc[0]['avg_xg_buildup']
+    except Exception as e:
+        # st.error(e)
+        pass
+    return 0.0, 0.0
+
 model = load_model()
 
 # Style Cards
@@ -366,19 +400,30 @@ elif model is not None:
     h_stats = form_dict.get(home_team, {'xg_5': 1.0, 'ppda_5': 10.0, 'deep_5': 5.0})
     a_stats = form_dict.get(away_team, {'xg_5': 1.0, 'ppda_5': 10.0, 'deep_5': 5.0})
     
-    # Input Vector (MUST MATCH train_model_v4.py)
-    # features = ['elo_diff', 'home_rest', 'away_rest', 'home_ppda_5', 'away_ppda_5', 'home_deep_5', 'away_deep_5', 'home_xg_5', 'away_xg_5']
+    # Fetch V5 Squad Stats
+    h_xgc, h_xgb = get_squad_stats(home_team)
+    a_xgc, a_xgb = get_squad_stats(away_team)
+    
+    # Input Vector (MUST MATCH train_model_v5.py)
+    # features = ['elo_diff', 'home_ppda_5', 'away_ppda_5', 'home_deep_5', 'away_deep_5', 'home_xg_5', 'away_xg_5', 'home_squad_xg_chain', 'home_squad_xg_buildup', 'away_squad_xg_chain', 'away_squad_xg_buildup']
+    
+    # Note: V5 removed 'rest' days from features in my training script?
+    # Let's check train_model_v5.py features list.
+    # Yes: features = ['elo_diff', 'home_ppda_5', ..., 'home_squad_xg_chain', ...]
+    # It did NOT include 'home_rest' or 'away_rest'.
     
     input_data = pd.DataFrame([{
         'elo_diff': h_elo - a_elo,
-        'home_rest': home_rest,
-        'away_rest': away_rest,
         'home_ppda_5': h_stats['ppda_5'],
         'away_ppda_5': a_stats['ppda_5'],
         'home_deep_5': h_stats['deep_5'],
         'away_deep_5': a_stats['deep_5'],
         'home_xg_5': h_stats['xg_5'],
-        'away_xg_5': a_stats['xg_5']
+        'away_xg_5': a_stats['xg_5'],
+        'home_squad_xg_chain': h_xgc,
+        'home_squad_xg_buildup': h_xgb,
+        'away_squad_xg_chain': a_xgc,
+        'away_squad_xg_buildup': a_xgb
     }])
     
     # Predict
