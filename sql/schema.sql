@@ -15,8 +15,8 @@ CREATE TABLE IF NOT EXISTS matches (
     match_id VARCHAR(50) PRIMARY KEY, -- We will use a composite ID like '2024-10-24-LIV-ARS'
     date DATE NOT NULL,
     season VARCHAR(10), -- e.g., '2023/2024'
-    home_team_id INT REFERENCES teams(team_id),
-    away_team_id INT REFERENCES teams(team_id),
+    home_team_id INT REFERENCES teams (team_id),
+    away_team_id INT REFERENCES teams (team_id),
     home_goals INT,
     away_goals INT,
     status VARCHAR(20) -- 'FINISHED', 'SCHEDULED'
@@ -27,25 +27,25 @@ CREATE TABLE IF NOT EXISTS matches (
 CREATE TABLE IF NOT EXISTS match_stats (
     id SERIAL PRIMARY KEY,
     match_id VARCHAR(50) REFERENCES matches(match_id),
-    
-    -- Basic Stats (from API)
-    home_possession INT,
-    away_possession INT,
-    home_shots_on_target INT,
-    away_shots_on_target INT,
-    home_corners INT,
-    away_corners INT,
-    
-    -- Advanced Stats (from Scraping Understat)
-    home_xg FLOAT,
-    away_xg FLOAT,
-    
-    -- Betting Data (Target Variable)
-    home_odds DECIMAL(5,2),
+
+-- Basic Stats (from API)
+home_possession INT,
+away_possession INT,
+home_shots_on_target INT,
+away_shots_on_target INT,
+home_corners INT,
+away_corners INT,
+
+-- Advanced Stats (from Scraping Understat)
+home_xg FLOAT, away_xg FLOAT,
+
+-- Betting Data (Target Variable)
+home_odds DECIMAL(5,2),
     draw_odds DECIMAL(5,2),
     away_odds DECIMAL(5,2)
 );
 
 -- Index for faster queries later
-CREATE INDEX idx_matches_date ON matches(date);
-CREATE INDEX idx_matches_teams ON matches(home_team_id, away_team_id);
+CREATE INDEX idx_matches_date ON matches (date);
+
+CREATE INDEX idx_matches_teams ON matches (home_team_id, away_team_id);
