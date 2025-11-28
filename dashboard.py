@@ -9,63 +9,79 @@ st.set_page_config(page_title="Football AI Oracle", layout="wide", page_icon="�
 
 # --- CUSTOM CSS ---
 st.markdown("""
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
         
         /* Global Settings */
         html, body, .stApp, [data-testid="stAppViewContainer"] {
             font-family: 'Poppins', sans-serif !important;
+            background-color: #000000 !important;
+            color: #ffffff !important;
         }
         
+        /* Glassmorphism Card */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+        }
+
         /* Headers */
         h1, h2, h3 {
             font-family: 'Poppins', sans-serif !important;
+            color: #ffffff !important;
         }
 
-        h1 {
-            font-weight: 500 !important;
-        }
-        
+        h1 { font-weight: 600 !important; font-size: 2.5rem !important; }
+        h2 { font-weight: 400 !important; font-size: 1.8rem !important; opacity: 0.9; }
+        h3 { font-weight: 300 !important; font-size: 1.4rem !important; opacity: 0.8; }
 
-        h2, h3 {
-            font-weight: 300 !important;
-        }
-
-        /* Metrics */
-        [data-testid="stMetricValue"] {
-            font-size: 2rem !important;
-        }
-        
-        /* Custom Card for Kelly Recommendation */
-        .kelly-card {
-            background-color: #1e2329; /* Darker card background */
-            padding: 20px;
-            border-radius: 12px;
-            border: 1px solid #30363d;
+        /* Metrics in Glass */
+        .metric-container {
             text-align: center;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-            margin-top: 20px;
         }
-        .kelly-title {
-            font-size: 1.0rem;
-            color: #8b949e;
+        .metric-label {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.6);
             text-transform: uppercase;
             letter-spacing: 1px;
-            font-weight: 600;
         }
-        .kelly-value {
-            font-size: 1.4rem;
-            font-weight: bold;
-            color: #2ea043; /* Success green */
-            margin-top: 10px;
-            display: block;
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #ffffff;
+            margin: 5px 0;
         }
-        .kelly-no-bet {
-            font-size: 1.4rem;
-            font-weight: bold;
-            color: #da3633; /* Danger red */
-            margin-top: 10px;
-            display: block;
+        .metric-delta {
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        .delta-pos { color: #4ade80; }
+        .delta-neg { color: #f87171; }
+        
+        /* Custom Button Styling (Streamlit buttons are hard to style, but we try) */
+        div.stButton > button {
+            background: rgba(255, 255, 255, 0.1) !important;
+            color: white !important;
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            border-radius: 8px !important;
+            backdrop-filter: blur(5px);
+        }
+        div.stButton > button:hover {
+            background: rgba(255, 255, 255, 0.2) !important;
+            border-color: rgba(255, 255, 255, 0.4) !important;
+        }
+
+        /* Sidebar Styling */
+        [data-testid="stSidebar"] {
+            background-color: #000000 !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
         }
         
         /* Footer */
@@ -74,25 +90,27 @@ st.markdown("""
             left: 0;
             bottom: 0;
             width: 100%;
-            background-color: #0e1117;
-            color: #8b949e;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            color: rgba(255, 255, 255, 0.7);
             text-align: center;
-            padding: 10px;
+            padding: 15px;
             font-size: 0.8rem;
-            border-top: 1px solid #30363d;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
             z-index: 100;
         }
 
         /* VS Text */
         .vs-text {
-            font-size: 4rem;
+            font-size: 3rem;
             font-weight: 900;
-            background: -webkit-linear-gradient(45deg, #ff6b6b, #f06595);
+            background: -webkit-linear-gradient(45deg, #ffffff, #888888);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             text-align: center;
             line-height: 1;
             margin-bottom: 10px;
+            opacity: 0.8;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -230,7 +248,7 @@ def get_last_5_matches(team_name, full_df):
     return pd.DataFrame(display_data)
 
 # --- MAIN UI ---
-st.title("⚽ Football AI Oracle")
+st.title("⚽︎ The Culture Football AI Oracle 🏟️")
 
 # Load Data
 df, elo_dict, form_dict, elo_hist_df = load_data()
@@ -294,38 +312,66 @@ else:
         kelly_msg = f"💰 Bet ${kelly_stake:.2f} ({kelly_fraction*100:.1f}%)"
 
     # --- MAIN DISPLAY ---
-    col1, col2, col3 = st.columns([1.2, 1.5, 1.2])
+    # --- MAIN DISPLAY ---
+    # We use a custom layout with glass cards
+    
+    # Helper for glass metrics
+    def glass_metric(label, value, delta=None, icon=None):
+        delta_html = ""
+        if delta is not None:
+            color_class = "delta-pos" if delta >= 0 else "delta-neg"
+            sign = "+" if delta > 0 else ""
+            delta_html = f'<div class="metric-delta {color_class}">{sign}{delta}</div>'
+            
+        icon_html = f'<i class="{icon}"></i> ' if icon else ""
+        
+        return f"""
+        <div class="glass-card metric-container">
+            <div class="metric-label">{icon_html}{label}</div>
+            <div class="metric-value">{value}</div>
+            {delta_html}
+        </div>
+        """
+
+    col1, col2, col3 = st.columns([1, 1.2, 1])
     
     with col1:
-        st.subheader(home_team)
-        st.metric("Elo Rating", int(h_elo), delta=int(h_elo - 1500))
-        st.write(f"**Avg xG:** {h_form['xg']:.2f}")
+        st.markdown(f"<h3 style='text-align: center;'>{home_team}</h3>", unsafe_allow_html=True)
+        st.markdown(glass_metric("Elo Rating", int(h_elo), int(h_elo - 1500), "fas fa-shield-alt"), unsafe_allow_html=True)
+        st.markdown(glass_metric("Avg xG (Last 5)", f"{h_form['xg']:.2f}", None, "fas fa-bullseye"), unsafe_allow_html=True)
     
     with col2:
+        st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
         st.markdown("<div class='vs-text'>VS</div>", unsafe_allow_html=True)
         
-        # Probability Display
-        prob_color = '#2ea043' if prob > 0.55 else ('#d29922' if prob > 0.40 else '#da3633')
+        # Probability Display in Glass
+        prob_color = '#4ade80' if prob > 0.55 else ('#facc15' if prob > 0.40 else '#f87171')
         st.markdown(f"""
-            <div style="text-align: center; margin-bottom: 20px;">
-                <div style="font-size: 3rem; font-weight: 700; color: {prob_color};">{prob:.1%}</div>
-                <div style="color: #8b949e; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;">Home Win Probability</div>
+            <div class="glass-card" style="text-align: center;">
+                <div style="font-size: 0.9rem; color: rgba(255,255,255,0.6); text-transform: uppercase; margin-bottom: 5px;">
+                    <i class="fas fa-chart-pie"></i> Home Win Probability
+                </div>
+                <div style="font-size: 3.5rem; font-weight: 700; color: {prob_color}; text-shadow: 0 0 20px {prob_color}40;">
+                    {prob:.1%}
+                </div>
             </div>
         """, unsafe_allow_html=True)
         
-        # Kelly Recommendation Box
-        kelly_class = "kelly-value" if kelly_fraction >= 0 else "kelly-no-bet"
+        # Kelly Recommendation Box in Glass
+        kelly_color = "#4ade80" if kelly_fraction >= 0 else "#f87171"
         st.markdown(f"""
-        <div class="kelly-card">
-            <div class="kelly-title">Kelly Recommendation (@ {odds})</div>
-            <div class="{kelly_class}">{kelly_msg}</div>
+        <div class="glass-card" style="border: 1px solid {kelly_color}40;">
+            <div class="metric-label"><i class="fas fa-coins"></i> Kelly Recommendation (@ {odds})</div>
+            <div style="font-size: 1.2rem; font-weight: 700; color: {kelly_color}; margin-top: 10px;">
+                {kelly_msg}
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
     with col3:
-        st.subheader(away_team)
-        st.metric("Elo Rating", int(a_elo), delta=int(a_elo - 1500))
-        st.write(f"**Avg xG:** {a_form['xg']:.2f}")
+        st.markdown(f"<h3 style='text-align: center;'>{away_team}</h3>", unsafe_allow_html=True)
+        st.markdown(glass_metric("Elo Rating", int(a_elo), int(a_elo - 1500), "fas fa-shield-alt"), unsafe_allow_html=True)
+        st.markdown(glass_metric("Avg xG (Last 5)", f"{a_form['xg']:.2f}", None, "fas fa-bullseye"), unsafe_allow_html=True)
 
     st.divider()
 
@@ -360,9 +406,9 @@ else:
         hovermode="x unified",
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='#e0e0e0'),
-        xaxis=dict(showgrid=False, linecolor='#30363d'),
-        yaxis=dict(showgrid=True, gridcolor='#30363d', linecolor='#30363d')
+        font=dict(color='#ffffff'),
+        xaxis=dict(showgrid=False, linecolor='rgba(255,255,255,0.1)'),
+        yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)', linecolor='rgba(255,255,255,0.1)')
     )
     st.plotly_chart(fig, use_container_width=True)
 
