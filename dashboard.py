@@ -265,13 +265,30 @@ def get_league_table(full_df):
     
     return df_table
 
+def get_top_players(limit=10):
+    """Fetches top scorers for the current season."""
+    engine = get_db_engine()
+    try:
+        query = """
+        SELECT p.name as "Player", t.name as "Team", s.goals as "Goals", s.assists as "Assists", s.xg as "xG", s.xa as "xA"
+        FROM player_season_stats s
+        JOIN players p ON s.player_id = p.player_id
+        JOIN teams t ON p.team_id = t.team_id
+        WHERE s.season = '2024'
+        ORDER BY s.goals DESC
+        LIMIT :limit
+        """
+        return pd.read_sql(text(query), engine, params={"limit": limit})
+    except Exception:
+        return pd.DataFrame()
+
 # --- MAIN UI ---
 st.title("🏟️ The Culture AI (V4)")
 
 # Sidebar for API Key
 with st.sidebar:
     st.header("⚙️ Settings")
-    odds_api_key = st.text_input("Odds API Key", type="password", help="Get free key at the-odds-api.com")
+    odds_api_key = st.text_input("Odds API Key", type="password", value="aea375a9fa00e5d5d1dc6b8d53e8f7d2", help="Get free key at the-odds-api.com")
 
 # Load Data
 df, elo_dict, form_dict, elo_hist_df = load_data()
@@ -552,9 +569,18 @@ elif model is not None:
 
     st.divider()
 
-    # --- LEAGUE TABLE ---
-    with st.expander("🏆 Live League Standings", expanded=False):
+    # --- LEAGUE & PLAYERS ---
+    tab_league, tab_players = st.tabs(["🏆 League Standings", "🏃 Top Players"])
+    
+    with tab_league:
         st.dataframe(get_league_table(df), use_container_width=True)
+        
+    with tab_players:
+        top_players = get_top_players(15)
+        if not top_players.empty:
+            st.dataframe(top_players, use_container_width=True)
+        else:
+            st.info("Player data not available. Please run 'scraper_players.py' and ensure schema is updated.")
 
 
     # --- FOOTER ---

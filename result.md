@@ -12,10 +12,10 @@
 
 ## 2. Additional Features to Add
 
-- **Player-Level Analytics:** If data permits, add a section for top scorers, assist leaders, and player xG performance.
+- **Configuration Refactoring:** Securely manage API keys and DB credentials.
 
 ## 3. Next Recommended Task
 
-**👉 Player-Level Analytics**
-- **Why:** Understanding individual player form is crucial for match prediction (e.g., is the top scorer injured?).
-- **How:** If player data is available in the database, create a "Top Players" section in the dashboard showing goals, assists, and xG per 90.
+**👉 Configuration Refactoring**
+- **Why:** Hardcoding API keys (like the Odds API key) is a security risk.
+- **How:** Use `python-dotenv` to load secrets from a `.env` file.
