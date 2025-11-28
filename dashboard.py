@@ -312,7 +312,7 @@ def get_team_rolling_stats(team_name, full_df, window=10):
     return df_stats.tail(window) # Return last N matches
 
 # --- MAIN UI ---
-st.title("⚽︎ The Culture Football AI Oracle 🏟️")
+st.title("🏟️ The Culture AI")
 
 # Load Data
 df, elo_dict, form_dict, elo_hist_df = load_data()
@@ -392,7 +392,7 @@ else:
             bet_target = "Away Win"
             bet_prob = prob_away
             bet_odds = odds_away
-            rec_color = "#f87171" # Red (using red for away usually, but here it means 'hot' value)
+            rec_color = "#f87171" # Red 
             
         # Kelly Calculation for the Best Bet
         b = bet_odds - 1

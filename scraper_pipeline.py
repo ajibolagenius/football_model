@@ -1,111 +1,160 @@
 import requests
 import json
-import pandas as pd
+import time
 from bs4 import BeautifulSoup
 from sqlalchemy import create_engine, text
 
-# --- CONFIGURATION ---
 DB_CONNECTION = "postgresql://postgres@localhost:5432/football_prediction_db"
-LEAGUE = "EPL"
-SEASON = "2025" # Understat usually uses the start year (e.g., 2024 for 24/25 season)
+SEASONS = ["2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025"]
+
+# --- MANUAL MAPPING (The Fix) ---
+# Key: Understat Slug (from URL)
+# Value: Your Database Name (Standard API-Football Names)
+NAME_MAP = {
+    "Arsenal": "Arsenal",
+    "Aston_Villa": "Aston Villa",
+    "Bournemouth": "Bournemouth",
+    "Brentford": "Brentford",
+    "Brighton": "Brighton",
+    "Burnley": "Burnley",
+    "Chelsea": "Chelsea",
+    "Crystal_Palace": "Crystal Palace",
+    "Everton": "Everton",
+    "Fulham": "Fulham",
+    "Ipswich": "Ipswich",
+    "Leeds": "Leeds",
+    "Leicester": "Leicester",
+    "Liverpool": "Liverpool",
+    "Luton": "Luton Town",
+    "Manchester_City": "Manchester City",
+    "Manchester_United": "Manchester United",
+    "Newcastle_United": "Newcastle",
+    "Norwich": "Norwich",
+    "Nottingham_Forest": "Nottingham Forest",
+    "Sheffield_United": "Sheffield United",
+    "Southampton": "Southampton",
+    "Tottenham": "Tottenham", 
+    "Watford": "Watford",
+    "West_Bromwich_Albion": "West Brom",
+    "West_Ham": "West Ham",
+    "Wolverhampton_Wanderers": "Wolves" 
+}
 
 def get_db_engine():
     return create_engine(DB_CONNECTION)
 
-def scrape_understat_full(league, season):
-    """
-    Scrapes Match Results AND xG from Understat.
-    Used as a fallback when the Official API is down or pending approval.
-    """
-    base_url = f"https://understat.com/league/{league}/{season}"
-    print(f"🕵️  Scraping full match data from {base_url}...")
-    
+def get_understat_slugs(season):
+    """Fetches Understat team slugs for a season."""
+    url = f"https://understat.com/league/EPL/{season}"
     try:
-        response = requests.get(base_url)
+        response = requests.get(url)
         soup = BeautifulSoup(response.content, 'html.parser')
         scripts = soup.find_all('script')
-        strings = [script.string for script in scripts if script.string and 'datesData' in script.string]
-        
-        if not strings:
-            print("❌ Error: Could not find data.")
-            return []
-
-        # Extract JSON
-        json_data = strings[0].split("('")[1].split("')")[0]
-        decoded_data = json.loads(json_data.encode('utf8').decode('unicode_escape'))
-        
-        print(f"✅ Successfully scraped {len(decoded_data)} matches.")
-        return decoded_data
+        for script in scripts:
+            if script.string and 'teamsData' in script.string:
+                json_string = script.string.split("('")[1].split("')")[0]
+                data = json.loads(json_string.encode('utf8').decode('unicode_escape'))
+                # Return list of 'title' (e.g. 'Manchester_United')
+                return [t['title'].replace(' ', '_') for t in data.values()]
     except Exception as e:
-        print(f"❌ Scraping Error: {e}")
-        return []
+        print(f"❌ Error fetching team list: {e}")
+    return []
 
-def store_scraped_data(scraped_data):
+def scrape_team_tactics(team_slug, season):
+    url = f"https://understat.com/team/{team_slug}/{season}"
+    print(f"   🕵️‍♀️ Parsing {team_slug} ({season})...")
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        scripts = soup.find_all('script')
+        for script in scripts:
+            if script.string and 'datesData' in script.string:
+                json_string = script.string.split("('")[1].split("')")[0]
+                return json.loads(json_string.encode('utf8').decode('unicode_escape'))
+    except:
+        return []
+    return []
+
+def update_database_tactics():
     engine = get_db_engine()
     
+    # 1. Get List of actual DB names to fuzzy match if needed
     with engine.connect() as conn:
-        print("💾 Saving data to database...")
-        for match in scraped_data:
-            # Understat Data Structure:
-            # {'id': '22284', 'h': {'title': 'Burnley', 'id': '92'}, 'a': {'title': 'Man City', 'id': '88'}, 'goals': {'h': '0', 'a': '3'}, 'xG': {'h': '0.31', 'a': '2.35'}, 'datetime': '2023-08-11 19:00:00', ...}
+        db_teams = [r[0] for r in conn.execute(text("SELECT name FROM teams")).fetchall()]
+
+    for season in SEASONS:
+        print(f"\n📅 Season {season}...")
+        slugs = get_understat_slugs(season)
+        
+        for slug in slugs:
+            # Determine DB Name
+            db_name = NAME_MAP.get(slug)
             
-            # 1. Skip if match hasn't happened yet (isResult is false)
-            if not match.get('isResult'):
+            # Fallback: Try exact match (replacing underscore)
+            if not db_name:
+                clean_slug = slug.replace('_', ' ')
+                if clean_slug in db_teams:
+                    db_name = clean_slug
+                else:
+                    # Try finding "Tottenham" in "Tottenham Hotspur"
+                    for t in db_teams:
+                        if clean_slug in t or t in clean_slug:
+                            db_name = t
+                            break
+            
+            if not db_name:
+                print(f"   ⚠️ Could not map '{slug}' to Database. Skipping.")
                 continue
 
-            match_date = match['datetime'].split(' ')[0]
+            # Scrape
+            matches = scrape_team_tactics(slug, season)
+            updates = 0
             
-            # 2. Insert Teams (Using Understat IDs)
-            home_team = match['h']
-            away_team = match['a']
-            
-            for t in [home_team, away_team]:
-                conn.execute(text("""
-                    INSERT INTO teams (team_id, name, understat_id) 
-                    VALUES (:id, :name, :uid)
-                    ON CONFLICT (team_id) DO NOTHING
-                """), {'id': int(t['id']), 'name': t['title'], 'uid': t['id']})
+            with engine.connect() as conn:
+                for m in matches:
+                    try:
+                        # Extract Data
+                        if m.get('ppda') and m['ppda'].get('def', 0) != 0:
+                            ppda = m['ppda']['att'] / m['ppda']['def']
+                        else:
+                            ppda = None
+                        deep = m.get('deep', 0)
+                        date = m['datetime'].split(' ')[0]
+                        
+                        # SQL Update
+                        # We use LIKE for the team name to be more forgiving
+                        if m['side'] == 'h':
+                            sql = """
+                            UPDATE match_stats SET home_ppda = :ppda, home_deep = :deep
+                            FROM matches, teams
+                            WHERE match_stats.match_id = matches.match_id
+                            AND matches.home_team_id = teams.team_id
+                            AND matches.date = :date
+                            AND teams.name = :db_name
+                            """
+                        else:
+                            sql = """
+                            UPDATE match_stats SET away_ppda = :ppda, away_deep = :deep
+                            FROM matches, teams
+                            WHERE match_stats.match_id = matches.match_id
+                            AND matches.away_team_id = teams.team_id
+                            AND matches.date = :date
+                            AND teams.name = :db_name
+                            """
+                        
+                        result = conn.execute(text(sql), {
+                            'ppda': ppda, 'deep': deep, 'date': date, 'db_name': db_name
+                        })
+                        if result.rowcount > 0:
+                            updates += 1
+                            
+                    except Exception:
+                        continue
+                conn.commit()
+            print(f"      ✅ Updated {updates} matches for {db_name}")
+            time.sleep(0.5)
 
-            # 3. Insert Match
-            # We create a custom ID: Date + HomeID + AwayID
-            match_uid = f"{match_date}-{home_team['id']}-{away_team['id']}"
-            
-            conn.execute(text("""
-                INSERT INTO matches (match_id, date, season, home_team_id, away_team_id, home_goals, away_goals, status)
-                VALUES (:mid, :date, :season, :hid, :aid, :hg, :ag, 'FT')
-                ON CONFLICT (match_id) DO UPDATE SET 
-                    home_goals = EXCLUDED.home_goals,
-                    away_goals = EXCLUDED.away_goals
-            """), {
-                'mid': match_uid,
-                'date': match_date,
-                'season': SEASON,
-                'hid': int(home_team['id']),
-                'aid': int(away_team['id']),
-                'hg': int(match['goals']['h']),
-                'ag': int(match['goals']['a'])
-            })
-
-            # 4. Insert xG Stats
-            conn.execute(text("""
-                INSERT INTO match_stats (match_id, home_xg, away_xg)
-                VALUES (:mid, :hxg, :axg)
-                ON CONFLICT (match_id) DO UPDATE SET
-                    home_xg = EXCLUDED.home_xg,
-                    away_xg = EXCLUDED.away_xg
-            """), {
-                'mid': match_uid,
-                'hxg': float(match['xG']['h']),
-                'axg': float(match['xG']['a'])
-            })
-            
-            conn.commit()
-            
-    print("✨ Database population complete via Scraper!")
+    print("\n🎉 Tactical Data Sync Complete!")
 
 if __name__ == "__main__":
-    # If today is Nov 2025, the season is "2025" (The 2025/2026 season)
-    # If the season hasn't started or just started, try "2024" for the previous full season data.
-    data = scrape_understat_full(LEAGUE, SEASON)
-    if data:
-        store_scraped_data(data)
+    update_database_tactics()
