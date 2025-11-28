@@ -296,8 +296,7 @@ st.title(f"🏟️ The Culture AI ({config.MODEL_VERSION})")
 with st.sidebar:
     st.header("⚙️ Settings")
     
-    # League Selector
-    selected_league = st.selectbox("Select League", ["EPL", "La_Liga", "Bundesliga"])
+
     
     # Use config key as default if available
     default_key = config.ODDS_API_KEY if config.ODDS_API_KEY else ""
@@ -307,6 +306,9 @@ with st.sidebar:
         st.cache_data.clear()
         st.cache_resource.clear()
         st.rerun()
+
+# League Selector (Main Page)
+selected_league = st.selectbox("Select League", ["EPL", "La_Liga", "Bundesliga"])
 
 # Load Data
 df, elo_dict, form_dict, elo_hist_df = load_data(selected_league)
