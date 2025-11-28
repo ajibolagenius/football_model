@@ -48,7 +48,7 @@ The **Culture Football AI Oracle** is an end-to-end data science project that sc
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/football-ai-oracle.git
+git clone [https://github.com/yourusername/football-ai-oracle.git
 cd football-ai-oracle
 ```
 
