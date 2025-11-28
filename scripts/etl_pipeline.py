@@ -19,50 +19,134 @@ DB_CONNECTION = config.DB_CONNECTION
 API_KEY = config.RAPIDAPI_KEY
 API_HOST = "api-football-v1.p.rapidapi.com"
 BASE_URL = "https://api-football-v1.p.rapidapi.com/v3"
+FD_API_KEY = config.FOOTBALL_DATA_ORG_KEY
 
 LEAGUES = {
     "EPL": 39,
     "La_Liga": 140,
     "Bundesliga": 78
 }
+
+FD_LEAGUES = {
+    "EPL": 2021,
+    "La_Liga": 2014,
+    "Bundesliga": 2002
+}
+
 SEASON = 2025
 
 # --- 1. DATABASE CONNECTION ---
 def get_db_engine():
     return create_engine(DB_CONNECTION)
 
-# --- 2. API FETCHER ---
+# --- 2a. RAPID API FETCHER ---
 def fetch_api_fixtures(league_id, date_from, date_to):
+    # ... (Existing code)
     url = f"{BASE_URL}/fixtures"
-    
-    querystring = {
-        "league": str(league_id),
-        "season": str(SEASON),
-        "from": date_from,
-        "to": date_to
-    }
-    
-    headers = {
-        "x-rapidapi-key": API_KEY,
-        "x-rapidapi-host": API_HOST
-    }
-
-    logger.info(f"📡 Fetching matches from {date_from} to {date_to}...")
+    querystring = {"league": str(league_id), "season": str(SEASON), "from": date_from, "to": date_to}
+    headers = {"x-rapidapi-key": API_KEY, "x-rapidapi-host": API_HOST}
+    logger.info(f"📡 Fetching matches from RapidAPI ({league_id})...")
     try:
         response = fetch_url(url, headers=headers, params=querystring)
         data = response.json()
-        
         if data.get('errors'):
-            logger.error(f"❌ API Internal Error: {data['errors']}")
+            logger.error(f"❌ RapidAPI Error: {data['errors']}")
+            return []
+        return data.get('response', [])
+    except Exception as e:
+        logger.error(f"❌ RapidAPI Exception: {e}")
+        return []
+
+# --- 2b. FOOTBALL-DATA.ORG FETCHER ---
+def fetch_football_data_org(league_name):
+    if not FD_API_KEY:
+        logger.warning("⚠️ No FOOTBALL_DATA_ORG_KEY found. Skipping.")
+        return []
+        
+    fd_id = FD_LEAGUES.get(league_name)
+    if not fd_id: return []
+    
+    url = f"https://api.football-data.org/v4/competitions/{fd_id}/matches"
+    headers = {"X-Auth-Token": FD_API_KEY}
+    querystring = {"season": str(SEASON)}
+    
+    logger.info(f"📡 Fetching matches from Football-Data.org ({league_name})...")
+    try:
+        response = fetch_url(url, headers=headers, params=querystring)
+        data = response.json()
+        if 'matches' not in data:
+            logger.error(f"❌ FD Error: {data}")
             return []
             
-        results = data.get('response', [])
-        logger.info(f"✅ Found {len(results)} matches.")
-        return results
+        matches = data['matches']
+        logger.info(f"✅ Found {len(matches)} matches from FD.")
         
+        # ADAPTER: Convert to RapidAPI format
+        adapted = []
+        for m in matches:
+            if m['status'] != 'FINISHED': continue
+            
+            # Map Status
+            status_short = 'FT'
+            
+            # Map Date
+            date = m['utcDate']
+            
+            # Map Teams (Use FD IDs + 200000 to avoid collision with RapidAPI)
+            h_id = m['homeTeam']['id'] + 200000
+            a_id = m['awayTeam']['id'] + 200000
+            
+            adapted.append({
+                'fixture': {
+                    'date': date,
+                    'status': {'short': status_short}
+                },
+                'teams': {
+                    'home': {'id': h_id, 'name': m['homeTeam']['name']},
+                    'away': {'id': a_id, 'name': m['awayTeam']['name']}
+                },
+                'goals': {
+                    'home': m['score']['fullTime']['home'],
+                    'away': m['score']['fullTime']['away']
+                }
+            })
+        return adapted
     except Exception as e:
-        logger.error(f"❌ Network/Parsing Error: {e}")
+        logger.error(f"❌ FD Exception: {e}")
         return []
+
+# --- 3. WEB SCRAPER ---
+# ... (Existing scrape_understat_xg code) ...
+
+# --- 4. DATA STORAGE ENGINE ---
+# ... (Existing process_and_store code) ...
+
+if __name__ == "__main__":
+    start_date = "2025-08-11" 
+    end_date = "2026-05-20"
+    
+    logger.info("🚀 Starting Data Pipeline...")
+    
+    for league_name, league_id in LEAGUES.items():
+        logger.info(f"\n🌍 Processing {league_name}...")
+        
+        # 1. Try RapidAPI
+        matches = fetch_api_fixtures(league_id, start_date, end_date)
+        
+        # 2. Try Football-Data.org if RapidAPI failed
+        if not matches:
+            logger.warning("⚠️ RapidAPI failed/empty. Trying Football-Data.org...")
+            matches = fetch_football_data_org(league_name)
+            
+        # 3. Scrape Understat (Always needed for xG)
+        scraped_matches = scrape_understat_xg(league=league_name, season=str(SEASON))
+        
+        # 4. Process (matches can be from RapidAPI or FD Adapter)
+        # If matches is still empty, process_and_store will use Understat Fallback
+        if matches or scraped_matches:
+            process_and_store(matches, scraped_matches, league_name)
+        else:
+            logger.warning(f"⚠️ No data found for {league_name} (API, FD, or Scraper).")
 
 # --- 3. WEB SCRAPER ---
 def scrape_understat_xg(league="EPL", season="2025"):

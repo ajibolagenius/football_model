@@ -10,6 +10,7 @@ DB_CONNECTION = os.getenv("DB_CONNECTION", "postgresql://postgres@localhost:5432
 # API Keys
 ODDS_API_KEY = os.getenv("ODDS_API_KEY")
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
+FOOTBALL_DATA_ORG_KEY = os.getenv("FOOTBALL_DATA_ORG_KEY")
 
 # Other Settings
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

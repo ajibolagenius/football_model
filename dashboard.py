@@ -302,6 +302,11 @@ with st.sidebar:
     # Use config key as default if available
     default_key = config.ODDS_API_KEY if config.ODDS_API_KEY else ""
     odds_api_key = st.text_input("Odds API Key", type="password", value=default_key, help="Get free key at the-odds-api.com")
+    
+    if st.button("🔄 Clear Cache"):
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        st.rerun()
 
 # Load Data
 df, elo_dict, form_dict, elo_hist_df = load_data(selected_league)
