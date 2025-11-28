@@ -473,6 +473,38 @@ elif model is not None:
         implied_odds = 0
         bet_odds = 0
 
+    # --- GOALS PREDICTIONS (O/U & BTTS) ---
+    # Prepare input for goals models (same features + goals stats)
+    input_goals = input_data.copy()
+    input_goals['home_goals_scored_5'] = h_stats['goals_scored_5']
+    input_goals['home_goals_conceded_5'] = h_stats['goals_conceded_5']
+    input_goals['away_goals_scored_5'] = a_stats['goals_scored_5']
+    input_goals['away_goals_conceded_5'] = a_stats['goals_conceded_5']
+    
+    # Reorder columns to match training
+    cols_goals = [
+        'elo_diff', 'home_ppda_5', 'away_ppda_5', 'home_deep_5', 'away_deep_5',
+        'home_xg_5', 'away_xg_5', 'home_goals_scored_5', 'home_goals_conceded_5',
+        'away_goals_scored_5', 'away_goals_conceded_5',
+        'home_squad_xg_chain', 'home_squad_xg_buildup', 'away_squad_xg_chain', 'away_squad_xg_buildup'
+    ]
+    input_goals = input_goals[cols_goals]
+    
+    # Load Models
+    try:
+        model_ou = xgb.XGBClassifier()
+        model_ou.load_model("football_v5_over_2_5.json")
+        prob_over = model_ou.predict_proba(input_goals)[0][1]
+    except:
+        prob_over = 0.5
+        
+    try:
+        model_btts = xgb.XGBClassifier()
+        model_btts.load_model("football_v5_btts.json")
+        prob_btts = model_btts.predict_proba(input_goals)[0][1]
+    except:
+        prob_btts = 0.5
+
     # --- MAIN DISPLAY ---
     def glass_metric(label, value, delta=None, icon=None):
         delta_html = ""
@@ -541,6 +573,34 @@ elif model is not None:
         """, unsafe_allow_html=True)
 
     st.divider()
+    
+    # --- GOALS DISPLAY ---
+    st.subheader("🥅 Goals Market Predictions")
+    g1, g2 = st.columns(2)
+    
+    with g1:
+        st.markdown(f"""
+        <div class="glass-card" style="text-align: center;">
+            <div class="metric-label">Over 2.5 Goals</div>
+            <div style="font-size: 1.5rem; font-weight: bold; color: {'#4ade80' if prob_over > 0.55 else '#f87171'};">
+                {prob_over:.1%}
+            </div>
+            <div style="font-size: 0.8rem; color: #aaa;">Probability</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with g2:
+        st.markdown(f"""
+        <div class="glass-card" style="text-align: center;">
+            <div class="metric-label">Both Teams to Score (BTTS)</div>
+            <div style="font-size: 1.5rem; font-weight: bold; color: {'#4ade80' if prob_btts > 0.55 else '#f87171'};">
+                {prob_btts:.1%}
+            </div>
+            <div style="font-size: 0.8rem; color: #aaa;">Probability</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.divider()
 
     # --- TACTICAL COMPARISON (RADAR) ---
     st.subheader("🧠 Tactical Analysis (Last 5 Games)")
@@ -565,19 +625,19 @@ elif model is not None:
         min(100, (h_stats['xg_5'] / MAX_XG) * 100),
         min(100, (h_stats['deep_5'] / MAX_DEEP) * 100),
         min(100, (h_ppda_score / MAX_PPDA_SCORE) * 100),
-        min(100, (h_stats['goals_5'] / MAX_GOALS) * 100)
+        min(100, (h_stats['goals_scored_5'] / MAX_GOALS) * 100)
     ]
     
     a_norm = [
         min(100, (a_stats['xg_5'] / MAX_XG) * 100),
         min(100, (a_stats['deep_5'] / MAX_DEEP) * 100),
         min(100, (a_ppda_score / MAX_PPDA_SCORE) * 100),
-        min(100, (a_stats['goals_5'] / MAX_GOALS) * 100)
+        min(100, (a_stats['goals_scored_5'] / MAX_GOALS) * 100)
     ]
     
     # Raw values for hover text
-    h_text = [f"{h_stats['xg_5']:.2f}", f"{h_stats['deep_5']:.1f}", f"{h_stats['ppda_5']:.1f} (PPDA)", f"{h_stats['goals_5']:.1f}"]
-    a_text = [f"{a_stats['xg_5']:.2f}", f"{a_stats['deep_5']:.1f}", f"{a_stats['ppda_5']:.1f} (PPDA)", f"{a_stats['goals_5']:.1f}"]
+    h_text = [f"{h_stats['xg_5']:.2f}", f"{h_stats['deep_5']:.1f}", f"{h_stats['ppda_5']:.1f} (PPDA)", f"{h_stats['goals_scored_5']:.1f}"]
+    a_text = [f"{a_stats['xg_5']:.2f}", f"{a_stats['deep_5']:.1f}", f"{a_stats['ppda_5']:.1f} (PPDA)", f"{a_stats['goals_scored_5']:.1f}"]
     
     fig = go.Figure()
     
