@@ -11,9 +11,11 @@ DB_CONNECTION = config.DB_CONNECTION
 def get_db_engine():
     return create_engine(DB_CONNECTION)
 
-def scrape_players(season="2025"):
-    logger.info(f"🕵️‍♀️ Scraping Players for {season}...")
-    url = f"https://understat.com/league/EPL/{season}"
+LEAGUES = ["EPL", "La_Liga", "Bundesliga"]
+
+def scrape_players(league="EPL", season="2025"):
+    logger.info(f"🕵️‍♀️ Scraping Players for {league} {season}...")
+    url = f"https://understat.com/league/{league}/{season}"
     try:
         response = fetch_url(url)
         soup = BeautifulSoup(response.content, 'html.parser')
@@ -31,13 +33,15 @@ def scrape_players(season="2025"):
 
 def sync_players_db():
     engine = get_db_engine()
-    players_data = scrape_players("2025") # Current Season
     
-    if not players_data:
-        logger.error("❌ No player data found.")
-        return
+    for league in LEAGUES:
+        players_data = scrape_players(league, "2025") # Current Season
+        
+        if not players_data:
+            logger.error(f"❌ No player data found for {league}.")
+            continue
 
-    logger.info(f"📥 Found {len(players_data)} players. Syncing to DB...")
+        logger.info(f"📥 Found {len(players_data)} players in {league}. Syncing to DB...")
     
     # Pre-fetch teams to map names to IDs
     try:

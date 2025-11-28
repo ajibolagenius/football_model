@@ -7,35 +7,40 @@ from sqlalchemy import create_engine, text
 from datetime import datetime, timedelta
 import time
 
+import config
+from utils import fetch_url, logger
+
 # --- CONFIGURATION ---
-# Database Connection: Matches the setup we did with Homebrew
-DB_CONNECTION = "postgresql://postgres@localhost:5432/football_prediction_db"
+# Database Connection
+DB_CONNECTION = config.DB_CONNECTION
 
 # API-Football Config
-# ⚠️ REPLACE THIS WITH YOUR KEY
-API_KEY = "1689abe0cbmsh6559fb4fa7f60acp1ba35fjsnf735e986b3e1" 
+API_KEY = config.RAPIDAPI_KEY
 
-# The Host header must match what RapidAPI expects (from your snippet)
+# The Host header must match what RapidAPI expects
 API_HOST = "api-football-v1.p.rapidapi.com"
 BASE_URL = "https://api-football-v1.p.rapidapi.com/v3"
 
-LEAGUE_ID = 39  # 39 is Premier League
-SEASON = 2025   # We can change this to 2024 if needed
+LEAGUES = {
+    "EPL": 39,
+    "La_Liga": 140,
+    "Bundesliga": 78
+}
+SEASON = 2025
 
 # --- 1. DATABASE CONNECTION ---
 def get_db_engine():
     return create_engine(DB_CONNECTION)
 
 # --- 2. API FETCHER ---
-def fetch_api_fixtures(date_from, date_to):
+def fetch_api_fixtures(league_id, date_from, date_to):
     """
     Fetches match results for the whole league within a date range.
-    We use 'fixtures' endpoint instead of 'headtohead' so we get EVERY match, not just specific pairs.
     """
     url = f"{BASE_URL}/fixtures"
     
     querystring = {
-        "league": str(LEAGUE_ID),
+        "league": str(league_id),
         "season": str(SEASON),
         "from": date_from,
         "to": date_to
@@ -107,7 +112,7 @@ def scrape_understat_xg(league="EPL", season="2025"):
         return []
 
 # --- 4. DATA STORAGE ENGINE ---
-def process_and_store(api_data, scraped_data):
+def process_and_store(api_data, scraped_data, league_name):
     """
     Merges official API data with scraped xG data and saves to PostgreSQL.
     """
@@ -139,9 +144,9 @@ def process_and_store(api_data, scraped_data):
                 t_id = teams[side]['id']
                 t_name = teams[side]['name']
                 conn.execute(text("""
-                    INSERT INTO teams (team_id, name) VALUES (:id, :name)
-                    ON CONFLICT (team_id) DO NOTHING
-                """), {'id': t_id, 'name': t_name})
+                    INSERT INTO teams (team_id, name, league) VALUES (:id, :name, :league)
+                    ON CONFLICT (team_id) DO UPDATE SET league = EXCLUDED.league
+                """), {'id': t_id, 'name': t_name, 'league': league_name})
 
             # --- 2. Generate Match ID & Link xG ---
             # API names: "Manchester United" vs "Newcastle"
@@ -170,12 +175,13 @@ def process_and_store(api_data, scraped_data):
             match_uid = f"{match_date}-{teams['home']['id']}-{teams['away']['id']}"
 
             conn.execute(text("""
-                INSERT INTO matches (match_id, date, season, home_team_id, away_team_id, home_goals, away_goals, status)
-                VALUES (:mid, :date, :season, :hid, :aid, :hg, :ag, :status)
+                INSERT INTO matches (match_id, date, season, home_team_id, away_team_id, home_goals, away_goals, status, league)
+                VALUES (:mid, :date, :season, :hid, :aid, :hg, :ag, :status, :league)
                 ON CONFLICT (match_id) DO UPDATE SET 
                     home_goals = EXCLUDED.home_goals,
                     away_goals = EXCLUDED.away_goals,
-                    status = EXCLUDED.status
+                    status = EXCLUDED.status,
+                    league = EXCLUDED.league
             """), {
                 'mid': match_uid,
                 'date': match_date,
@@ -184,7 +190,8 @@ def process_and_store(api_data, scraped_data):
                 'aid': teams['away']['id'],
                 'hg': goals['home'],
                 'ag': goals['away'],
-                'status': fix['status']['short']
+                'status': fix['status']['short'],
+                'league': league_name
             })
 
             # --- 4. Insert Stats (xG) ---
@@ -214,15 +221,18 @@ if __name__ == "__main__":
     
     print("🚀 Starting Data Pipeline...")
     
-    # 1. Fetch Official Data
-    api_matches = fetch_api_fixtures(start_date, end_date)
-    
-    # 2. Scrape Advanced Data
-    scraped_matches = scrape_understat_xg(league="EPL", season=str(SEASON))
-    
-    # 3. Merge & Save
-    if api_matches:
-        process_and_store(api_matches, scraped_matches)
-        print("\n✨ Pipeline Complete. Data is in Postgres.")
-    else:
-        print("\n⚠️ No API data found. Check your API Key and Dates.")
+    for league_name, league_id in LEAGUES.items():
+        print(f"\n🌍 Processing {league_name}...")
+        
+        # 1. Fetch Official Data
+        api_matches = fetch_api_fixtures(league_id, start_date, end_date)
+        
+        # 2. Scrape Advanced Data
+        scraped_matches = scrape_understat_xg(league=league_name, season=str(SEASON))
+        
+        # 3. Merge & Save
+        if api_matches:
+            process_and_store(api_matches, scraped_matches, league_name)
+            print(f"✨ {league_name} Complete.")
+        else:
+            print(f"⚠️ No API data found for {league_name}.")

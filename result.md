@@ -2,15 +2,16 @@
 
 ## 1. Remaining Refactoring & Enhancements
 
-All core refactoring, robustness, and scheduling tasks are complete.
+All core refactoring, robustness, scheduling, and multi-league tasks are complete.
 
 ## 2. Additional Features to Add
 
-- **More Leagues:** Expand beyond EPL to La Liga, Bundesliga, etc.
 - **Advanced Metrics:** Expected Threat (xT), Passing Networks.
+- **UI Polish:** Improve the UI with better visualizations and a more user-friendly interface.
+- **Directory Arrangements:** Re-arrange the directory structure to make it more organized and easier to navigate. Group related files into folders.
 
 ## 3. Next Recommended Task
 
-**👉 More Leagues**
-- **Why:** Expand the model's coverage to other major European leagues.
-- **How:** Update `scraper_pipeline.py` to iterate through a list of leagues (e.g., `['EPL', 'La_Liga', 'Bundesliga']`).
+**👉 UI Polish**
+- **Why:** Make the dashboard look more professional and easier to use.
+- **How:** Use `streamlit-extras` for cards, improve the layout, add team logos.

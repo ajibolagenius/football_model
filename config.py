@@ -10,3 +10,4 @@ DB_CONNECTION = os.getenv("DB_CONNECTION", "postgresql://postgres@localhost:5432
 
 # API Keys
 ODDS_API_KEY = os.getenv("ODDS_API_KEY", "")
+RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY", "")

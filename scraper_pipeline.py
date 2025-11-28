@@ -39,15 +39,27 @@ NAME_MAP = {
     "Watford": "Watford",
     "West_Bromwich_Albion": "West Brom",
     "West_Ham": "West Ham",
-    "Wolverhampton_Wanderers": "Wolves" 
+    "Wolverhampton_Wanderers": "Wolves",
+    # La Liga
+    "Real_Madrid": "Real Madrid",
+    "Barcelona": "Barcelona",
+    "Atletico_Madrid": "Atletico Madrid",
+    "Sevilla": "Sevilla",
+    # Bundesliga
+    "Bayern_Munich": "Bayern Munich",
+    "Borussia_Dortmund": "Dortmund",
+    "Bayer_Leverkusen": "Bayer Leverkusen", 
+    "RB_Leipzig": "RB Leipzig",
 }
+
+LEAGUES = ["EPL", "La_Liga", "Bundesliga"]
 
 def get_db_engine():
     return create_engine(DB_CONNECTION)
 
-def get_understat_slugs(season):
+def get_understat_slugs(league, season):
     """Fetches Understat team slugs for a season."""
-    url = f"https://understat.com/league/EPL/{season}"
+    url = f"https://understat.com/league/{league}/{season}"
     try:
         response = fetch_url(url)
         soup = BeautifulSoup(response.content, 'html.parser')
@@ -84,9 +96,10 @@ def update_database_tactics():
     with engine.connect() as conn:
         db_teams = [r[0] for r in conn.execute(text("SELECT name FROM teams")).fetchall()]
 
-    for season in SEASONS:
-        logger.info(f"\n📅 Season {season}...")
-        slugs = get_understat_slugs(season)
+    for league in LEAGUES:
+        for season in SEASONS:
+            logger.info(f"\n📅 League {league} - Season {season}...")
+            slugs = get_understat_slugs(league, season)
         
         for slug in slugs:
             # Determine DB Name
