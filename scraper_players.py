@@ -9,7 +9,7 @@ DB_CONNECTION = "postgresql://postgres@localhost:5432/football_prediction_db"
 def get_db_engine():
     return create_engine(DB_CONNECTION)
 
-def scrape_players(season="2024"):
+def scrape_players(season="2025"):
     print(f"🕵️‍♀️ Scraping Players for {season}...")
     url = f"https://understat.com/league/EPL/{season}"
     try:
@@ -29,7 +29,7 @@ def scrape_players(season="2024"):
 
 def sync_players_db():
     engine = get_db_engine()
-    players_data = scrape_players("2024") # Current Season
+    players_data = scrape_players("2025") # Current Season
     
     if not players_data:
         print("❌ No player data found.")
@@ -107,7 +107,7 @@ def sync_players_db():
                 sql = """
                 INSERT INTO player_season_stats 
                 (player_id, season, goals, assists, xg, xa, shots, key_passes, yellow_cards, red_cards, minutes, npg, npxg, xg_chain, xg_buildup)
-                VALUES (:pid, '2024', :g, :a, :xg, :xa, :s, :kp, :y, :r, :m, :npg, :npxg, :xgc, :xgb)
+                VALUES (:pid, '2025', :g, :a, :xg, :xa, :s, :kp, :y, :r, :m, :npg, :npxg, :xgc, :xgb)
                 ON CONFLICT (player_id, season) 
                 DO UPDATE SET 
                     goals = EXCLUDED.goals,
