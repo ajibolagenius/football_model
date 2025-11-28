@@ -247,6 +247,76 @@ def get_last_5_matches(team_name, full_df):
     
     return pd.DataFrame(display_data)
 
+def get_h2h_matches(team1, team2, full_df):
+    """
+    Extracts head-to-head matches between two teams.
+    """
+    # Filter for matches between the two teams
+    h2h = full_df[
+        ((full_df['home_name'] == team1) & (full_df['away_name'] == team2)) |
+        ((full_df['home_name'] == team2) & (full_df['away_name'] == team1))
+    ].copy()
+    
+    h2h = h2h.sort_values('date', ascending=False)
+    
+    display_data = []
+    for _, row in h2h.iterrows():
+        if row['home_name'] == team1:
+            home = team1
+            away = team2
+            score = f"{row['home_goals']} - {row['away_goals']}"
+        else:
+            home = team2
+            away = team1
+            score = f"{row['home_goals']} - {row['away_goals']}"
+            
+        display_data.append({
+            "Date": row['date'],
+            "Home": home,
+            "Score": score,
+            "Away": away,
+            "xG": f"{row['home_xg']:.2f} - {row['away_xg']:.2f}"
+        })
+        
+    return pd.DataFrame(display_data)
+
+def get_team_rolling_stats(team_name, full_df, window=10):
+    """
+    Calculates rolling xG and Goals for a specific team.
+    """
+    # Filter matches involving the team
+    team_matches = full_df[(full_df['home_name'] == team_name) | (full_df['away_name'] == team_name)].copy()
+    team_matches = team_matches.sort_values('date', ascending=True) # Sort by date ascending for rolling calc
+    
+    stats_data = []
+    for _, row in team_matches.iterrows():
+        if row['home_name'] == team_name:
+            xg_for = row['home_xg']
+            xg_against = row['away_xg']
+            goals_for = row['home_goals']
+            goals_against = row['away_goals']
+        else:
+            xg_for = row['away_xg']
+            xg_against = row['home_xg']
+            goals_for = row['away_goals']
+            goals_against = row['home_goals']
+            
+        stats_data.append({
+            'date': row['date'],
+            'xg_for': xg_for,
+            'xg_against': xg_against,
+            'goals_for': goals_for,
+            'goals_against': goals_against
+        })
+        
+    df_stats = pd.DataFrame(stats_data)
+    
+    # Calculate Rolling Averages
+    df_stats['rolling_xg_for'] = df_stats['xg_for'].rolling(window=5, min_periods=1).mean()
+    df_stats['rolling_xg_against'] = df_stats['xg_against'].rolling(window=5, min_periods=1).mean()
+    
+    return df_stats.tail(window) # Return last N matches
+
 # --- MAIN UI ---
 st.title("⚽︎ The Culture Football AI Oracle 🏟️")
 
@@ -375,6 +445,84 @@ else:
 
     st.divider()
 
+    # --- HEAD TO HEAD ---
+    st.subheader("⚔️ Head-to-Head History")
+    df_h2h = get_h2h_matches(home_team, away_team, df)
+    if not df_h2h.empty:
+        st.dataframe(df_h2h, use_container_width=True, hide_index=True)
+    else:
+        st.info("No recent head-to-head matches found in the database.")
+
+    st.divider()
+
+    # --- ADVANCED STATS ---
+    st.subheader("📊 Advanced Performance Metrics")
+    
+    tab1, tab2 = st.tabs(["Rolling xG Trends", "Finishing Efficiency"])
+    
+    # Calculate stats for both teams
+    home_stats = get_team_rolling_stats(home_team, df, window=10)
+    away_stats = get_team_rolling_stats(away_team, df, window=10)
+    
+    with tab1:
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown(f"**{home_team} - xG Trend (Last 10)**")
+            fig_h = go.Figure()
+            fig_h.add_trace(go.Scatter(x=home_stats['date'], y=home_stats['rolling_xg_for'], name='xG Created', line=dict(color='#4ade80', width=3)))
+            fig_h.add_trace(go.Scatter(x=home_stats['date'], y=home_stats['rolling_xg_against'], name='xG Conceded', line=dict(color='#f87171', width=3)))
+            fig_h.update_layout(
+                height=300, margin=dict(l=10, r=10, t=30, b=10),
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='#ffffff'),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                xaxis=dict(showgrid=False, linecolor='rgba(255,255,255,0.1)'),
+                yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)', linecolor='rgba(255,255,255,0.1)')
+            )
+            st.plotly_chart(fig_h, use_container_width=True)
+            
+        with c2:
+            st.markdown(f"**{away_team} - xG Trend (Last 10)**")
+            fig_a = go.Figure()
+            fig_a.add_trace(go.Scatter(x=away_stats['date'], y=away_stats['rolling_xg_for'], name='xG Created', line=dict(color='#4ade80', width=3)))
+            fig_a.add_trace(go.Scatter(x=away_stats['date'], y=away_stats['rolling_xg_against'], name='xG Conceded', line=dict(color='#f87171', width=3)))
+            fig_a.update_layout(
+                height=300, margin=dict(l=10, r=10, t=30, b=10),
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='#ffffff'),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                xaxis=dict(showgrid=False, linecolor='rgba(255,255,255,0.1)'),
+                yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)', linecolor='rgba(255,255,255,0.1)')
+            )
+            st.plotly_chart(fig_a, use_container_width=True)
+
+    with tab2:
+        st.caption("Comparing Actual Goals Scored vs Expected Goals (xG). Positive difference means clinical finishing (or luck).")
+        c1, c2 = st.columns(2)
+        
+        # Helper for efficiency chart
+        def create_efficiency_chart(stats_df, team_name):
+            total_goals = stats_df['goals_for'].sum()
+            total_xg = stats_df['xg_for'].sum()
+            
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=['Goals', 'xG'], y=[total_goals, total_xg], marker_color=['#ffffff', '#58a6ff']))
+            fig.update_layout(
+                title=f"{team_name} (Last 10 Games)",
+                height=250, margin=dict(l=20, r=20, t=40, b=20),
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='#ffffff'),
+                yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)')
+            )
+            return fig
+
+        with c1:
+            st.plotly_chart(create_efficiency_chart(home_stats, home_team), use_container_width=True)
+        with c2:
+            st.plotly_chart(create_efficiency_chart(away_stats, away_team), use_container_width=True)
+
+    st.divider()
+
     # --- RECENT FORM TABLES ---
     st.subheader("📅 Recent Match History (Last 5)")
     c1, c2 = st.columns(2)
@@ -411,6 +559,38 @@ else:
         yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)', linecolor='rgba(255,255,255,0.1)')
     )
     st.plotly_chart(fig, use_container_width=True)
+
+    # --- AI INSIGHTS (Feature Importance) ---
+    st.divider()
+    st.subheader("🧠 AI Model Insights")
+    
+    # Get feature importance
+    importances = model.feature_importances_
+    # Feature names matching the training columns
+    feature_names = ['Elo Diff', 'Home Elo', 'Away Elo', 'Home xG (L5)', 'Away xG (L5)', 'Home Pts (L5)', 'Away Pts (L5)']
+    
+    # Create DataFrame for plotting
+    fi_df = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
+    fi_df = fi_df.sort_values('Importance', ascending=True)
+    
+    fig_fi = go.Figure(go.Bar(
+        x=fi_df['Importance'],
+        y=fi_df['Feature'],
+        orientation='h',
+        marker=dict(color='#58a6ff')
+    ))
+    
+    fig_fi.update_layout(
+        title="What influenced this prediction?",
+        height=400,
+        margin=dict(l=20, r=20, t=40, b=20),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='#ffffff'),
+        xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)', linecolor='rgba(255,255,255,0.1)'),
+        yaxis=dict(showgrid=False, linecolor='rgba(255,255,255,0.1)')
+    )
+    st.plotly_chart(fig_fi, use_container_width=True)
 
     # --- FOOTER ---
     st.markdown('<div class="footer">(c) 2025 DON_GENIUS</div>', unsafe_allow_html=True)
