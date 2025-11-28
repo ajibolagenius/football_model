@@ -12,12 +12,11 @@
 
 ## 2. Additional Features to Add
 
-- **League Standings Table:** Auto-generate a live league table from the match history in the database.
 - **Live Odds Integration:** Instead of manual input, integrate with a free/freemium Odds API to fetch real-time bookmaker odds.
 - **Player-Level Analytics:** If data permits, add a section for top scorers, assist leaders, and player xG performance.
 
 ## 3. Next Recommended Task
 
-**👉 League Standings Table**
-- **Why:** It provides immediate visual context for the teams' performance this season.
-- **How:** Query the match history, calculate points, goal difference, and goals scored for all teams, and display it in a sortable table.
+**👉 Live Odds Integration**
+- **Why:** Manual input of odds is tedious. Automating this ensures the "Value Bet" calculation is always up-to-date and accurate.
+- **How:** Sign up for a free API (e.g., The Odds API), create a `fetch_odds` function, and auto-populate the odds fields in the dashboard.

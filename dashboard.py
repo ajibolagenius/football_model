@@ -196,6 +196,74 @@ def get_h2h_matches(team1, team2, full_df):
         
     return pd.DataFrame(display_data)
 
+def get_league_table(full_df):
+    """Calculates the league table for the CURRENT SEASON."""
+    # Ensure date is datetime
+    full_df = full_df.copy()
+    full_df['date'] = pd.to_datetime(full_df['date'])
+    
+    # Determine Current Season Start
+    if full_df.empty: return pd.DataFrame()
+    
+    max_date = full_df['date'].max()
+    # If we are in the second half of the year (Aug+), season started this year.
+    # If we are in the first half (Jan-May), season started last year.
+    # Using July 1st as a safe cutoff.
+    if max_date.month >= 7: 
+        season_start = pd.Timestamp(year=max_date.year, month=7, day=1)
+    else:
+        season_start = pd.Timestamp(year=max_date.year - 1, month=7, day=1)
+        
+    # Filter for current season
+    season_df = full_df[full_df['date'] >= season_start]
+    
+    table = {}
+    
+    for _, row in season_df.iterrows():
+        home = row['home_name']
+        away = row['away_name']
+        h_goals = row['home_goals']
+        a_goals = row['away_goals']
+        
+        if home not in table: table[home] = {'P': 0, 'W': 0, 'D': 0, 'L': 0, 'GF': 0, 'GA': 0, 'Pts': 0}
+        if away not in table: table[away] = {'P': 0, 'W': 0, 'D': 0, 'L': 0, 'GF': 0, 'GA': 0, 'Pts': 0}
+        
+        # Update Home
+        table[home]['P'] += 1
+        table[home]['GF'] += h_goals
+        table[home]['GA'] += a_goals
+        
+        # Update Away
+        table[away]['P'] += 1
+        table[away]['GF'] += a_goals
+        table[away]['GA'] += h_goals
+        
+        # Result
+        if h_goals > a_goals:
+            table[home]['W'] += 1
+            table[home]['Pts'] += 3
+            table[away]['L'] += 1
+        elif h_goals == a_goals:
+            table[home]['D'] += 1
+            table[home]['Pts'] += 1
+            table[away]['D'] += 1
+            table[away]['Pts'] += 1
+        else:
+            table[away]['W'] += 1
+            table[away]['Pts'] += 3
+            table[home]['L'] += 1
+            
+    # Convert to DataFrame
+    if not table: return pd.DataFrame()
+    
+    df_table = pd.DataFrame.from_dict(table, orient='index')
+    df_table['GD'] = df_table['GF'] - df_table['GA']
+    
+    # Sort
+    df_table = df_table.sort_values(by=['Pts', 'GD', 'GF'], ascending=False)
+    
+    return df_table
+
 # --- MAIN UI ---
 st.title("🏟️ The Culture AI (V4)")
 
@@ -375,43 +443,72 @@ elif model is not None:
     # --- TACTICAL COMPARISON (RADAR) ---
     st.subheader("🧠 Tactical Analysis (Last 5 Games)")
     
-    # Normalize for Radar (Simple Min-Max scaling for visualization)
-    # PPDA: Lower is better (more pressure). Deep: Higher is better. xG: Higher is better.
-    # To make the chart intuitive, we might invert PPDA so "bigger is better" (Intensity)
+    # Normalize for Radar to ensuring all axes are visible
+    # We scale everything to 0-100 based on "reasonable max" values for football
     
-    categories = ['xG Created', 'Deep Completions', 'Pressing Intensity (Inv PPDA)', 'Goals Scored']
+    categories = ['xG Created', 'Deep Completions', 'Pressing Intensity', 'Goals Scored']
     
-    # Invert PPDA: 30 is low intensity, 5 is high intensity. Map 5->100, 30->0 approx.
-    # Simple formula: max(0, 30 - ppda)
+    # Define Max Values for Normalization
+    MAX_XG = 3.0
+    MAX_DEEP = 20.0
+    MAX_PPDA_SCORE = 30.0 # Since we invert PPDA (30-0), max score is 30
+    MAX_GOALS = 4.0
+    
+    # Calculate Scores
     h_ppda_score = max(0, 30 - h_stats['ppda_5'])
     a_ppda_score = max(0, 30 - a_stats['ppda_5'])
+    
+    # Normalize (Value / Max * 100)
+    h_norm = [
+        min(100, (h_stats['xg_5'] / MAX_XG) * 100),
+        min(100, (h_stats['deep_5'] / MAX_DEEP) * 100),
+        min(100, (h_ppda_score / MAX_PPDA_SCORE) * 100),
+        min(100, (h_stats['goals_5'] / MAX_GOALS) * 100)
+    ]
+    
+    a_norm = [
+        min(100, (a_stats['xg_5'] / MAX_XG) * 100),
+        min(100, (a_stats['deep_5'] / MAX_DEEP) * 100),
+        min(100, (a_ppda_score / MAX_PPDA_SCORE) * 100),
+        min(100, (a_stats['goals_5'] / MAX_GOALS) * 100)
+    ]
+    
+    # Raw values for hover text
+    h_text = [f"{h_stats['xg_5']:.2f}", f"{h_stats['deep_5']:.1f}", f"{h_stats['ppda_5']:.1f} (PPDA)", f"{h_stats['goals_5']:.1f}"]
+    a_text = [f"{a_stats['xg_5']:.2f}", f"{a_stats['deep_5']:.1f}", f"{a_stats['ppda_5']:.1f} (PPDA)", f"{a_stats['goals_5']:.1f}"]
     
     fig = go.Figure()
     
     fig.add_trace(go.Scatterpolar(
-        r=[h_stats['xg_5'], h_stats['deep_5'], h_ppda_score, h_stats['goals_5']],
+        r=h_norm,
         theta=categories,
         fill='toself',
         name=home_team,
-        line_color='#4ade80'
+        line_color='#4ade80',
+        text=h_text,
+        hoverinfo="text+name"
     ))
     
     fig.add_trace(go.Scatterpolar(
-        r=[a_stats['xg_5'], a_stats['deep_5'], a_ppda_score, a_stats['goals_5']],
+        r=a_norm,
         theta=categories,
         fill='toself',
         name=away_team,
-        line_color='#f87171'
+        line_color='#f87171',
+        text=a_text,
+        hoverinfo="text+name"
     ))
     
     fig.update_layout(
         polar=dict(
-            radialaxis=dict(visible=True, range=[0, max(h_stats['deep_5'], a_stats['deep_5'], 10)], showticklabels=False),
-            bgcolor='rgba(0,0,0,0)'
+            radialaxis=dict(visible=True, range=[0, 100], showticklabels=False),
+            bgcolor='rgba(255, 255, 255, 0.05)'
         ),
+        height=500, # Increased size
         paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='white'),
-        showlegend=True
+        font=dict(color='white', size=14),
+        showlegend=True,
+        margin=dict(l=80, r=80, t=20, b=20)
     )
     st.plotly_chart(fig, use_container_width=True)
     
@@ -431,6 +528,13 @@ elif model is not None:
         
     st.subheader("⚔️ Head-to-Head")
     st.dataframe(get_h2h_matches(home_team, away_team, df), use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # --- LEAGUE TABLE ---
+    with st.expander("🏆 Live League Standings", expanded=False):
+        st.dataframe(get_league_table(df), use_container_width=True)
+
 
     # --- FOOTER ---
     st.markdown('<div class="footer">(c) 2025 DON_GENIUS | V4 Model</div>', unsafe_allow_html=True)
