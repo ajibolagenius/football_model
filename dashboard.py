@@ -318,22 +318,29 @@ st.title("⚽︎ The Culture Football AI Oracle 🏟️")
 df, elo_dict, form_dict, elo_hist_df = load_data()
 model = load_model()
 
-# --- SIDEBAR: CONFIG & CALCULATOR ---
-st.sidebar.header("1. Match Configuration")
-teams = sorted(list(elo_dict.keys()))
-home_team = st.sidebar.selectbox("Home Team", teams, index=0)
-away_team = st.sidebar.selectbox("Away Team", teams, index=1)
+# --- CONTROL PANEL ---
+st.markdown("### ⚙️ Match Configuration & Betting")
 
-st.sidebar.markdown("---")
-st.sidebar.header("2. Betting Calculator (Kelly)")
-st.sidebar.info("Enter your bankroll and the bookie's odds to see the optimal stake.")
-
-bankroll = st.sidebar.number_input("Total Bankroll ($)", value=1000, step=100)
+# Create a nice layout for the controls
+with st.container():
+    c_team1, c_team2, c_bank = st.columns([1.5, 1.5, 1])
     
-st.sidebar.markdown("### Odds Input")
-odds_home = st.sidebar.number_input("Home Odds", value=2.00, step=0.01)
-odds_draw = st.sidebar.number_input("Draw Odds", value=3.50, step=0.01)
-odds_away = st.sidebar.number_input("Away Odds", value=3.80, step=0.01)
+    teams = sorted(list(elo_dict.keys()))
+    
+    with c_team1:
+        home_team = st.selectbox("Home Team", teams, index=0)
+    with c_team2:
+        away_team = st.selectbox("Away Team", teams, index=1)
+    with c_bank:
+        bankroll = st.number_input("Bankroll (₦)", value=1000, step=100)
+        
+    st.caption("Bookie Odds (for Value Calculation)")
+    oc1, oc2, oc3 = st.columns(3)
+    with oc1: odds_home = st.number_input("Home Odds", value=2.00, step=0.01)
+    with oc2: odds_draw = st.number_input("Draw Odds", value=3.50, step=0.01)
+    with oc3: odds_away = st.number_input("Away Odds", value=3.80, step=0.01)
+    
+st.divider()
 
 # --- PREDICTION LOGIC ---
 if home_team == away_team:
@@ -395,7 +402,7 @@ else:
         kelly_stake = max(0, bankroll * kelly_fraction * 0.5) # Using Half Kelly for safety
         
         value_msg = f"✅ VALUE FOUND: {bet_target}"
-        rec_msg = f"Bet ${kelly_stake:.2f} (EV: {best_ev:.2f})"
+        rec_msg = f"Bet ₦{kelly_stake:.2f} (EV: {best_ev:.2f})"
         implied_odds = 1/bet_prob
         
     else:
@@ -481,10 +488,7 @@ else:
             </div>
         """, unsafe_allow_html=True)
 
-    with col3:
-        st.markdown(f"<h3 style='text-align: center;'>{away_team}</h3>", unsafe_allow_html=True)
-        st.markdown(glass_metric("Elo Rating", int(a_elo), int(a_elo - 1500), "fas fa-shield-alt"), unsafe_allow_html=True)
-        st.markdown(glass_metric("Avg xG (Last 5)", f"{a_form['xg']:.2f}", None, "fas fa-bullseye"), unsafe_allow_html=True)
+
 
     st.divider()
 
