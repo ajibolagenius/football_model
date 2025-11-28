@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import xgboost as xgb
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 import numpy as np
 import odds_integration
 
@@ -274,12 +274,13 @@ def get_top_players(limit=10):
         FROM player_season_stats s
         JOIN players p ON s.player_id = p.player_id
         JOIN teams t ON p.team_id = t.team_id
-        WHERE s.season = '2024'
+        WHERE s.season = '2025'
         ORDER BY s.goals DESC
         LIMIT :limit
         """
         return pd.read_sql(text(query), engine, params={"limit": limit})
-    except Exception:
+    except Exception as e:
+        st.error(f"DB Error: {e}")
         return pd.DataFrame()
 
 # --- MAIN UI ---
