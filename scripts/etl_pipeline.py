@@ -93,12 +93,98 @@ def scrape_understat_xg(league="EPL", season="2025"):
 def process_and_store(api_data, scraped_data, league_name):
     engine = get_db_engine()
     
+    # 1. Prepare Data Source
+    # If API data exists, use it. If not, fallback to Understat (scraped_data).
+    use_fallback = False
+    if not api_data and scraped_data:
+        logger.warning(f"⚠️ Using Understat as FALLBACK for {league_name} matches.")
+        use_fallback = True
+        # Convert scraped_data to a format similar to api_data for iteration, 
+        # OR just iterate scraped_data directly.
+        # Let's iterate scraped_data directly in the fallback block.
+    
     scraped_map = {}
     for match in scraped_data:
         key = f"{match['h']['title']} - {match['a']['title']}"
         scraped_map[key] = match
 
     with engine.connect() as conn:
+        # --- FALLBACK MODE (Understat Only) ---
+        if use_fallback:
+            for match in scraped_data:
+                if not match['isResult']: continue # Skip unplayed
+                
+                match_date = match['datetime'].split(' ')[0]
+                h_name = match['h']['title']
+                a_name = match['a']['title']
+                h_goals = int(match['goals']['h'])
+                a_goals = int(match['goals']['a'])
+                h_xg = float(match['xG']['h'])
+                a_xg = float(match['xG']['a'])
+                
+                # Generate/Find Team IDs
+                # We use a simple hash or offset for fallback IDs to avoid collision with API IDs (usually < 10000)
+                # But ideally we check if name exists.
+                
+                def get_or_create_team(name, league):
+                    # Check DB
+                    res = conn.execute(text("SELECT team_id FROM teams WHERE name = :name"), {"name": name}).fetchone()
+                    if res: return res[0]
+                    
+                    # Create new ID (Understat ID + 500000 is risky if we don't have it here)
+                    # Let's use a hash of the name to be deterministic? Or just a random high number?
+                    # Let's use a deterministic hash modulo 100000 + 500000
+                    import zlib
+                    new_id = (zlib.crc32(name.encode()) % 100000) + 500000
+                    
+                    conn.execute(text("""
+                        INSERT INTO teams (team_id, name, league) VALUES (:id, :name, :league)
+                        ON CONFLICT (team_id) DO NOTHING
+                    """), {'id': new_id, 'name': name, 'league': league})
+                    return new_id
+
+                h_id = get_or_create_team(h_name, league_name)
+                a_id = get_or_create_team(a_name, league_name)
+                
+                match_uid = f"{match_date}-{h_id}-{a_id}"
+                
+                # Insert Match
+                conn.execute(text("""
+                    INSERT INTO matches (match_id, date, season, home_team_id, away_team_id, home_goals, away_goals, status, league)
+                    VALUES (:mid, :date, :season, :hid, :aid, :hg, :ag, :status, :league)
+                    ON CONFLICT (match_id) DO UPDATE SET 
+                        home_goals = EXCLUDED.home_goals,
+                        away_goals = EXCLUDED.away_goals,
+                        status = EXCLUDED.status,
+                        league = EXCLUDED.league
+                """), {
+                    'mid': match_uid,
+                    'date': match_date,
+                    'season': str(SEASON),
+                    'hid': h_id,
+                    'aid': a_id,
+                    'hg': h_goals,
+                    'ag': a_goals,
+                    'status': 'FT',
+                    'league': league_name
+                })
+                
+                # Insert Stats
+                conn.execute(text("""
+                    INSERT INTO match_stats (match_id, home_xg, away_xg)
+                    VALUES (:mid, :hxg, :axg)
+                    ON CONFLICT (match_id) DO UPDATE SET
+                        home_xg = EXCLUDED.home_xg,
+                        away_xg = EXCLUDED.away_xg
+                """), {
+                    'mid': match_uid,
+                    'hxg': h_xg,
+                    'axg': a_xg
+                })
+                conn.commit()
+            return # Done with fallback
+
+        # --- NORMAL MODE (API Data) ---
         for fixture in api_data:
             fix = fixture['fixture']
             teams = fixture['teams']
@@ -183,7 +269,8 @@ if __name__ == "__main__":
         api_matches = fetch_api_fixtures(league_id, start_date, end_date)
         scraped_matches = scrape_understat_xg(league=league_name, season=str(SEASON))
         
-        if api_matches:
+        # Pass both. Logic inside handles fallback.
+        if api_matches or scraped_matches:
             process_and_store(api_matches, scraped_matches, league_name)
         else:
-            logger.warning(f"⚠️ No API data found for {league_name}.")
+            logger.warning(f"⚠️ No data found for {league_name} (API or Scraper).")
