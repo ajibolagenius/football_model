@@ -76,8 +76,12 @@ def train_v5():
     fi = pd.DataFrame({'Feature': features, 'Importance': model.feature_importances_}).sort_values('Importance', ascending=False)
     print(fi)
     
-    model.save_model("football_v5.json")
-    print("💾 Model saved to football_v5.json")
+    # Save Feature Importance
+    fi.to_json(config.FEATURE_IMPORTANCE_FILE, orient='records')
+    print(f"💾 Feature importance saved to {config.FEATURE_IMPORTANCE_FILE}")
+    
+    model.save_model(config.MODEL_FILE)
+    print(f"💾 Model saved to {config.MODEL_FILE}")
 
 if __name__ == "__main__":
     train_v5()

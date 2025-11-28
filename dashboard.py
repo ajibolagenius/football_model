@@ -9,7 +9,7 @@ import config
 from streamlit_extras.metric_cards import style_metric_cards
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="The Culture AI (V4)", layout="centered", page_icon="🐼")
+st.set_page_config(page_title=f"The Culture AI ({config.MODEL_VERSION})", layout="centered", page_icon="🐼")
 
 # --- CUSTOM CSS ---
 def load_css(file_name):
@@ -52,7 +52,7 @@ def load_data(league="EPL"):
     # 2. Calculate Elo
     current_elo = {}
     elo_history = []
-    K_FACTOR = 20
+    K_FACTOR = config.ELO_K_FACTOR
     
     for index, row in df.iterrows():
         h = row['home_name']
@@ -288,7 +288,7 @@ def get_top_players(league="EPL", limit=10):
         return pd.DataFrame()
 
 # --- MAIN UI ---
-st.title("🏟️ The Culture AI (V5)")
+st.title(f"🏟️ The Culture AI ({config.MODEL_VERSION})")
 
 # Sidebar for API Key
 with st.sidebar:
@@ -313,7 +313,7 @@ def load_model():
     model = xgb.XGBClassifier()
     # Try loading V5, fallback to V4
     try:
-        model.load_model("football_v5.json")
+        model.load_model(config.MODEL_FILE)
     except:
         model.load_model("football_v4.json")
     return model
@@ -614,6 +614,16 @@ elif model is not None:
     
     st.caption("Note: 'Pressing Intensity' is derived from PPDA (Passes Allowed Per Defensive Action). Higher is more intense pressing.")
 
+    # --- MODEL INSIGHTS ---
+    with st.expander("📊 Model Insights (Feature Importance)"):
+        st.write("These features drive the model's predictions:")
+        try:
+            imp_df = pd.read_json(config.FEATURE_IMPORTANCE_FILE)
+            st.bar_chart(imp_df.set_index("Feature"))
+            st.caption("xGBuildup and xGChain are new metrics representing the squad's playmaking quality.")
+        except:
+            st.info("Feature importance data not available. Train the model to generate it.")
+
     st.divider()
 
     # --- HISTORICAL DATA ---
@@ -646,4 +656,4 @@ elif model is not None:
 
 
     # --- FOOTER ---
-    st.markdown('<div class="footer">(c) 2025 DON_GENIUS | V5 Model</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="footer">(c) 2025 DON_GENIUS | {config.MODEL_VERSION} Model</div>', unsafe_allow_html=True)

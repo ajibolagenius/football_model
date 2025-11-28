@@ -13,3 +13,7 @@ RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
 
 # Other Settings
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+MODEL_VERSION = "V5"
+ELO_K_FACTOR = 20
+MODEL_FILE = "football_v5.json"
+FEATURE_IMPORTANCE_FILE = "feature_importance.json"
