@@ -9,7 +9,7 @@ import config
 from streamlit_extras.metric_cards import style_metric_cards
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Football AI Oracle V4", layout="wide", page_icon="⚽")
+st.set_page_config(page_title="The Culture AI (V4)", layout="centered", page_icon="🐼")
 
 # --- CUSTOM CSS ---
 def load_css(file_name):
@@ -273,7 +273,8 @@ def get_top_players(league="EPL", limit=10):
     engine = get_db_engine()
     try:
         query = """
-        SELECT p.name as "Player", t.name as "Team", s.goals as "Goals", s.assists as "Assists", s.xg as "xG", s.xa as "xA"
+        SELECT p.name as "Player", t.name as "Team", s.goals as "Goals", s.assists as "Assists", 
+               s.xg as "xG", s.xa as "xA", s.xg_chain as "xGChain", s.xg_buildup as "xGBuildup"
         FROM player_season_stats s
         JOIN players p ON s.player_id = p.player_id
         JOIN teams t ON p.team_id = t.team_id

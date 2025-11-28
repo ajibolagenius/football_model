@@ -60,62 +60,67 @@ def sync_players_db():
         with engine.connect() as conn:
             for p in players_data:
                 try:
-                    # 1. Map Team Name to Team ID
-                    team_name = p['team_title']
-                    team_id = team_map.get(team_name)
-                    
-                    # Fallback mapping if exact match fails
-                    if not team_id:
-                        # Try simple replacements
-                        if team_name == "Manchester United": team_id = team_map.get("Manchester United")
-                        elif team_name == "Newcastle United": team_id = team_map.get("Newcastle")
-                        elif team_name == "Wolverhampton Wanderers": team_id = team_map.get("Wolves")
-                        elif team_name == "West Ham": team_id = team_map.get("West Ham")
-                        elif team_name == "Tottenham": team_id = team_map.get("Tottenham")
-                        elif team_name == "Brighton": team_id = team_map.get("Brighton")
-                        # Add more mappings as needed
-                    
-                    if not team_id:
-                        # logger.warning(f"⚠️ Could not map team '{team_name}' for player '{p['player_name']}'. Skipping.")
-                        continue
+                    with conn.begin_nested():
+                        # 1. Map Team Name to Team ID
+                        team_name = p['team_title']
+                        team_id = team_map.get(team_name)
+                        
+                        # Fallback mapping if exact match fails
+                        if not team_id:
+                            # Try simple replacements
+                            if team_name == "Manchester United": team_id = team_map.get("Manchester United")
+                            elif team_name == "Newcastle United": team_id = team_map.get("Newcastle")
+                            elif team_name == "Wolverhampton Wanderers": team_id = team_map.get("Wolves")
+                            elif team_name == "West Ham": team_id = team_map.get("West Ham")
+                            elif team_name == "Tottenham": team_id = team_map.get("Tottenham")
+                            elif team_name == "Brighton": team_id = team_map.get("Brighton")
+                            # Add more mappings as needed
+                        
+                        if not team_id:
+                            # logger.warning(f"⚠️ Could not map team '{team_name}' for player '{p['player_name']}'. Skipping.")
+                            continue
 
-                    # 2. Insert Player
-                    conn.execute(text("""
-                        INSERT INTO players (player_id, name, team_id, position)
-                        VALUES (:pid, :name, :tid, :pos)
-                        ON CONFLICT (player_id) DO UPDATE SET
-                            team_id = EXCLUDED.team_id,
-                            position = EXCLUDED.position
-                    """), {
-                        'pid': p['id'],
-                        'name': p['player_name'],
-                        'tid': team_id,
-                        'pos': p['position']
-                    })
+                        # 2. Insert Player
+                        conn.execute(text("""
+                            INSERT INTO players (player_id, name, team_id, position)
+                            VALUES (:pid, :name, :tid, :pos)
+                            ON CONFLICT (player_id) DO UPDATE SET
+                                team_id = EXCLUDED.team_id,
+                                position = EXCLUDED.position
+                        """), {
+                            'pid': p['id'],
+                            'name': p['player_name'],
+                            'tid': team_id,
+                            'pos': p['position']
+                        })
 
-                    # 3. Insert Season Stats
-                    conn.execute(text("""
-                        INSERT INTO player_season_stats (player_id, season, goals, assists, xg, xa, yellow_cards, red_cards, minutes_played)
-                        VALUES (:pid, :season, :g, :a, :xg, :xa, :yc, :rc, :mins)
-                        ON CONFLICT (player_id, season) DO UPDATE SET
-                            goals = EXCLUDED.goals,
-                            assists = EXCLUDED.assists,
-                            xg = EXCLUDED.xg,
-                            xa = EXCLUDED.xa,
-                            yellow_cards = EXCLUDED.yellow_cards,
-                            red_cards = EXCLUDED.red_cards,
-                            minutes_played = EXCLUDED.minutes_played
-                    """), {
-                        'pid': p['id'],
-                        'season': '2025',
-                        'g': p['goals'],
-                        'a': p['assists'],
-                        'xg': p['xG'],
-                        'xa': p['xA'],
-                        'yc': p['yellow_cards'],
-                        'rc': p['red_cards'],
-                        'mins': p['time']
-                    })
+                        # 3. Insert Season Stats
+                        conn.execute(text("""
+                            INSERT INTO player_season_stats (player_id, season, goals, assists, xg, xa, yellow_cards, red_cards, minutes_played, xg_chain, xg_buildup)
+                            VALUES (:pid, :season, :g, :a, :xg, :xa, :yc, :rc, :mins, :xgc, :xgb)
+                            ON CONFLICT (player_id, season) DO UPDATE SET
+                                goals = EXCLUDED.goals,
+                                assists = EXCLUDED.assists,
+                                xg = EXCLUDED.xg,
+                                xa = EXCLUDED.xa,
+                                yellow_cards = EXCLUDED.yellow_cards,
+                                red_cards = EXCLUDED.red_cards,
+                                minutes_played = EXCLUDED.minutes_played,
+                                xg_chain = EXCLUDED.xg_chain,
+                                xg_buildup = EXCLUDED.xg_buildup
+                        """), {
+                            'pid': p['id'],
+                            'season': '2025',
+                            'g': p['goals'],
+                            'a': p['assists'],
+                            'xg': p['xG'],
+                            'xa': p['xA'],
+                            'yc': p['yellow_cards'],
+                            'rc': p['red_cards'],
+                            'mins': p['time'],
+                            'xgc': p.get('xGChain', 0),
+                            'xgb': p.get('xGBuildup', 0)
+                        })
                     
                 except Exception as e:
                     logger.error(f"❌ Error inserting player {p['player_name']}: {e}")
@@ -126,4 +131,5 @@ def sync_players_db():
     logger.info("✅ Player Data Sync Complete!")
 
 if __name__ == "__main__":
+    print("🚀 Starting Player Scraper...")
     sync_players_db()

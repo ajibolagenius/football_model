@@ -7,7 +7,6 @@ All core refactoring, robustness, scheduling, multi-league, UI polish, and direc
 ## 2. Additional Features to Add
 
 - **Advanced Metrics:** Expected Threat (xT), Passing Networks.
-- **Data Sources:** Add more data sources to the pipeline.
 
 ## 3. Next Recommended Task
 
