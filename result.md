@@ -11,6 +11,10 @@ All core refactoring, robustness, scheduling, multi-league, UI polish, and direc
 
 ## 3. Next Recommended Task
 
-**👉 Passing Networks**
+**👉 Passing Networks (Requires New Data Source)**
 - **Why:** Visualize team passing structure.
 - **How:** Requires event-level data (passer, receiver, location). Hard to scrape from Understat. Might need a new source or manual event logging.
+
+**👉 Automated Backtesting**
+- **Why:** Validate model performance over time.
+- **How:** Create a script to simulate betting on past seasons using the V5 model.
