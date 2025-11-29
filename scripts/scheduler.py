@@ -49,16 +49,16 @@ def run_script(script_name):
 def job_daily_update():
     logger.info("⏰ Triggering Daily Update...")
     # 1. Fetch Matches (API)
-    run_script("etl_pipeline.py")
+    run_script("scripts/etl_pipeline.py")
     # 2. Scrape Tactical Data
-    run_script("scraper_pipeline.py")
+    run_script("scripts/scraper_pipeline.py")
     # 3. Scrape Players
-    run_script("scraper_players.py")
+    run_script("scripts/scraper_players.py")
     logger.info("💤 Update Job Finished. Sleeping...")
 
 # Schedule the job
 # Run every day at 02:00 AM
-schedule.every().day.at("02:00").do(run_script, "scraper_players.py") # Update players
+schedule.every().day.at("02:00").do(run_script, "scripts/scraper_players.py") # Update players
 schedule.every().day.at("02:30").do(job_daily_update) # Full pipeline
 
 logger.info("⏳ Scheduler Started. Waiting for jobs...")
