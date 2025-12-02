@@ -40,7 +40,7 @@ The **Culture AI Oracle** is an end-to-end data science project that scrapes foo
 - **Visualization**: [Plotly](https://plotly.com/) (Interactive charts), HTML/CSS (Custom styling)
 - **Machine Learning**: [XGBoost](https://xgboost.readthedocs.io/), [Scikit-Learn](https://scikit-learn.org/)
 - **Data Processing**: [Pandas](https://pandas.pydata.org/), [SQLAlchemy](https://www.sqlalchemy.org/)
-- **Database**: [PostgreSQL](https://www.postgresql.org/) (Neon Cloud supported)
+- **Database**: [PostgreSQL](https://www.postgresql.org/) (Supabase Cloud supported)
 - **Data Sources**: 
     - **RapidAPI (API-Football)**: Primary match data.
     - **Football-Data.org**: Reliable fallback for match data.
@@ -54,7 +54,7 @@ The **Culture AI Oracle** is an end-to-end data science project that scrapes foo
 
 ### Prerequisites
 - Python 3.9+
-- PostgreSQL installed (Local) or Neon Account (Cloud)
+- PostgreSQL installed (Local) or Supabase Account (Cloud)
 
 ### 1. Clone the Repository
 ```bash
@@ -76,7 +76,7 @@ pip install -r requirements.txt
 ### 4. Configuration
 Create a `.env` file in the root directory (use `env.example` as a template):
 ```env
-# Database (Local or Neon)
+# Database (Local or Supabase)
 DB_CONNECTION=postgresql://postgres@localhost:5432/football_prediction_db
 
 # API Keys
