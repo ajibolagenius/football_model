@@ -3,60 +3,61 @@ from pydantic import BaseModel
 import xgboost as xgb
 import pandas as pd
 import os
-from sqlalchemy import create_engine
 import sys
+from sqlalchemy import create_engine
 
-# Add parent directory to path to access config
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# --- PATH CONFIGURATION (The Fix) ---
+# Get the absolute path of the folder where THIS script lives (ml_api)
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+# Go up one level to the project root
+ROOT_DIR = os.path.dirname(CURRENT_DIR)
+# Construct the absolute path to the model
+MODEL_PATH = os.path.join(ROOT_DIR, "football_v5.json")
+
+# Add root to sys.path so we can import config.py
+sys.path.append(ROOT_DIR)
+
 try:
     from config import DB_CONNECTION
 except ImportError:
-    # Fallback if running locally in isolation
-    DB_CONNECTION = os.getenv("DATABASE_URL", "postgresql://postgres@localhost:5432/football_prediction_db")
+    # Fallback if config is missing
+    DB_CONNECTION = os.getenv("DATABASE_URL")
 
 app = FastAPI(title="Football Oracle Brain")
 
-# Load Model Once on Startup
+# Load Model
 model = xgb.XGBClassifier()
-MODEL_PATH = "../football_v5.json" # Path relative to this folder
 
 if os.path.exists(MODEL_PATH):
-    model.load_model(MODEL_PATH)
-    print("🧠 Model Loaded Successfully")
+    try:
+        model.load_model(MODEL_PATH)
+        print(f"✅ BRAIN ONLINE: Model loaded from {MODEL_PATH}")
+    except Exception as e:
+        print(f"❌ MODEL CORRUPT: {e}")
 else:
-    print("⚠️ Warning: Model file not found.")
+    print(f"⚠️ MODEL MISSING: Looked in {MODEL_PATH}")
+    print("   -> Did you train the model? Run 'python3 scripts/train_model_v5.py' first.")
 
-# Define Request Structure
-class MatchRequest(BaseModel):
-    home_team_id: int
-    away_team_id: int
-    # Optional: Allow passing manual stats for "What-If" scenarios
-    home_rest: float = 7.0
-    away_rest: float = 7.0
+class PredictionRequest(BaseModel):
+    match_id: str
 
 @app.get("/")
-def health_check():
-    return {"status": "online", "model_loaded": os.path.exists(MODEL_PATH)}
+def health():
+    return {"status": "active", "model_loaded": os.path.exists(MODEL_PATH)}
 
-@app.post("/predict/match_id")
-def predict_by_id(match_id: str):
-    """
-    Predicts a match based on features already in the DB (model_features_v5).
-    Best for upcoming scheduled games.
-    """
+@app.post("/predict")
+def predict_match(req: PredictionRequest):
     engine = create_engine(DB_CONNECTION)
     
-    # Fetch features from DB
-    query = f"SELECT * FROM model_features_v5 WHERE match_id = '{match_id}'"
+    query = f"SELECT * FROM model_features_v5 WHERE match_id = '{req.match_id}'"
     try:
         df = pd.read_sql(query, engine)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Database Error: {str(e)}")
     
     if df.empty:
-        raise HTTPException(status_code=404, detail="Match features not found. Run feature engineering.")
+        raise HTTPException(status_code=404, detail="Features not found. Run feature engineering.")
 
-    # Define features exactly as trained
     features = [
         'elo_diff', 'home_rest', 'away_rest',
         'home_ppda_5', 'away_ppda_5',
@@ -64,17 +65,15 @@ def predict_by_id(match_id: str):
         'home_xg_5', 'away_xg_5'
     ]
     
-    # Predict
+    # Ensure correct column order and data types
     try:
-        probs = model.predict_proba(df[features])[0]
+        df_input = df[features].astype(float)
+        probs = model.predict_proba(df_input)[0]
         return {
-            "match_id": match_id,
-            "prob_away": float(probs[0]),
-            "prob_draw": float(probs[1]),
-            "prob_home": float(probs[2]),
-            "verdict": "Home Win" if probs[2] > 0.5 else "Not Clear"
+            "match_id": req.match_id,
+            "home_win": float(probs[2]),
+            "draw": float(probs[1]),
+            "away_win": float(probs[0])
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
-
-# Run with: uvicorn ml_api.main:app --reload
+        raise HTTPException(status_code=500, detail=f"Prediction Error: {str(e)}")
